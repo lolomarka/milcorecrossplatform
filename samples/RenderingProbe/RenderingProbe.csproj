@@ -1,12 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <UseWPF>true</UseWPF>
+    <TargetFramework Condition="'$(ForkLinux)' != 'true'">net10.0-windows</TargetFramework>
+    <UseWPF Condition="'$(ForkLinux)' != 'true'">true</UseWPF>
+    <TargetFramework Condition="'$(ForkLinux)' == 'true'">net10.0</TargetFramework>
+    <ForkAssemblies Condition="'$(ForkLinux)' == 'true'">../../upstream/wpf/artifacts/packaging/Release/Microsoft.DotNet.Wpf.GitHub/lib/net10.0</ForkAssemblies>
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia.Headless" Version="12.1.5" />
     <PackageReference Include="Avalonia.Skia" Version="12.1.5" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(ForkLinux)' == 'true'">
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.12" />
+    <PackageReference Include="System.IO.Packaging" Version="10.0.12" />
+    <Reference Include="WindowsBase" HintPath="$(ForkAssemblies)/WindowsBase.dll" />
+    <Reference Include="PresentationCore" HintPath="$(ForkAssemblies)/PresentationCore.dll" />
+    <Reference Include="PresentationFramework" HintPath="$(ForkAssemblies)/PresentationFramework.dll" />
   </ItemGroup>
 </Project>

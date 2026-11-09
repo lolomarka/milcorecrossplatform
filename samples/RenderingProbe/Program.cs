@@ -23,7 +23,6 @@ public sealed class WpfVisualPresenter : Avalonia.Controls.Control
     protected override Size ArrangeOverride(Size finalSize)
     {
         Root.Arrange(new W.Rect(0, 0, finalSize.Width, finalSize.Height));
-        Root.UpdateLayout();
         return finalSize;
     }
 
@@ -166,7 +165,6 @@ public static class Program
     {
         presenter.Measure(new Size(width, height));
         presenter.Arrange(new Rect(0, 0, width, height));
-        presenter.Root.UpdateLayout();
         using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(width, height));
         bitmap.Render(presenter);
         bitmap.Save(path, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
@@ -174,14 +172,13 @@ public static class Program
 
     private static void AssertPixel(string path, int x, int y, int red, int green, int blue)
     {
-        using var stream = System.IO.File.OpenRead(path);
-        var decoder = new M.Imaging.PngBitmapDecoder(stream, M.Imaging.BitmapCreateOptions.None, M.Imaging.BitmapCacheOption.OnLoad);
-        var bitmap = new M.Imaging.FormatConvertedBitmap(decoder.Frames[0], M.PixelFormats.Bgra32, null, 0);
-        var pixel = new byte[4];
-        bitmap.CopyPixels(new W.Int32Rect(x, y, 1, 1), pixel, 4, 0);
-        if (Math.Abs(pixel[2] - red) > 1 || Math.Abs(pixel[1] - green) > 1 || Math.Abs(pixel[0] - blue) > 1 || pixel[3] != 255)
-            throw new InvalidOperationException($"Unexpected pixel in {path} at ({x},{y}): {pixel[2]},{pixel[1]},{pixel[0]},{pixel[3]}");
+        using var bitmap = SkiaSharp.SKBitmap.Decode(path)
+            ?? throw new InvalidOperationException($"Cannot decode {path}");
+        var pixel = bitmap.GetPixel(x, y);
+        if (Math.Abs(pixel.Red - red) > 1 || Math.Abs(pixel.Green - green) > 1 ||
+            Math.Abs(pixel.Blue - blue) > 1 || pixel.Alpha != 255)
+        {
+            throw new InvalidOperationException($"Unexpected pixel in {path} at ({x},{y}): {pixel}");
+        }
     }
 }
-
-

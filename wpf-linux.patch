@@ -1,3 +1,44 @@
+diff --git a/src/Microsoft.DotNet.Wpf/src/Common/Graphics/exports.cs b/src/Microsoft.DotNet.Wpf/src/Common/Graphics/exports.cs
+index 25ca02f..603880d 100644
+--- a/src/Microsoft.DotNet.Wpf/src/Common/Graphics/exports.cs
++++ b/src/Microsoft.DotNet.Wpf/src/Common/Graphics/exports.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ //
+@@ -54,12 +54,17 @@ internal enum ChannelMarshalType
+     /// </remark>
+     internal struct CompositionEngineLock : IDisposable
+     {
++        private static readonly object s_managedCompositionLock = new object();
++
+         /// <summary>
+         /// Aquires the composition engine lock.
+         /// </summary>
+         internal static CompositionEngineLock Acquire()
+         {
+-            UnsafeNativeMethods.MilCoreApi.EnterCompositionEngineLock();
++            if (OperatingSystem.IsWindows())
++                UnsafeNativeMethods.MilCoreApi.EnterCompositionEngineLock();
++            else
++                System.Threading.Monitor.Enter(s_managedCompositionLock);
+ 
+             return new CompositionEngineLock();
+         }
+@@ -69,7 +74,10 @@ internal static CompositionEngineLock Acquire()
+         /// </summary>
+         public void Dispose()
+         {
+-            UnsafeNativeMethods.MilCoreApi.ExitCompositionEngineLock();
++            if (OperatingSystem.IsWindows())
++                UnsafeNativeMethods.MilCoreApi.ExitCompositionEngineLock();
++            else
++                System.Threading.Monitor.Exit(s_managedCompositionLock);
+         }
+     }
+ 
 diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationCore/ModuleInitializer.cs b/src/Microsoft.DotNet.Wpf/src/PresentationCore/ModuleInitializer.cs
 index fe58319..22421f6 100644
 --- a/src/Microsoft.DotNet.Wpf/src/PresentationCore/ModuleInitializer.cs

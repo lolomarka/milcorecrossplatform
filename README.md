@@ -75,3 +75,14 @@ wsl -d Debian -- timeout 15s env DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 ./artif
 The test uses invariant globalization because this Debian installation lacks ICU. The dispatcher probe has no windows, input handling, or Avalonia event-loop integration.
 
 Pass `--layout` after DispatcherProbe to run the experimental WPF layout check. PresentationCore now limits DirectWrite initialization and IMM detection to Windows. WindowsBase skips registry tracing settings on Linux and uses the managed debugger check there. The Linux probe uses DejaVu Sans at 12 DIP with normal style and weight for message font defaults. The probe creates Grid and Rectangle and sets the dimensions. InputManager checks STA on Windows. The Linux probe uses a double-click threshold of 4 units per axis and 500 ms, a black control foreground and disabled keyboard cues. Window registers taskbar messages only on Windows. MediaContext uses Stopwatch on Linux and initializes the native composition channels and notification window on Windows. The headless layout probe uses 96 DPI and skips HWND monitor checks. In Debian under WSL, Grid.Measure and Grid.Arrange produce the expected 40 by 20 DIP rectangle. Text rendering remains to be ported. The dispatcher check still passes independently.
+
+## Linux rendering probe
+
+After building the patched WPF assemblies, publish and run the same Avalonia/Skia probe in Debian. Skia needs the distro's fontconfig runtime libraries. The sample uses invariant globalization for environments without ICU.
+
+```powershell
+dotnet publish samples/RenderingProbe -c Release -p:ForkLinux=true -r linux-x64 --self-contained -o artifacts/rendering-linux
+wsl -d Debian -- timeout 20s env DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 ./artifacts/rendering-linux/RenderingProbe artifacts/linux-png
+```
+
+The probe renders two PNGs from WPF drawings after explicit Measure and Arrange passes. Pixel checks cover fill, opacity, translation, clipping, and resize. The Linux path uses a managed composition lock and renders without a window.

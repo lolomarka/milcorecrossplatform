@@ -78,6 +78,149 @@ index 2af814e..7298e71 100644
  
              _overIsEnabledChangedEventHandler = new DependencyPropertyChangedEventHandler(OnOverIsEnabledChanged);
              _overIsVisibleChangedEventHandler = new DependencyPropertyChangedEventHandler(OnOverIsVisibleChanged);
+diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Media/MediaContext.cs b/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Media/MediaContext.cs
+index 04bdb15..751e486 100644
+--- a/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Media/MediaContext.cs
++++ b/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Media/MediaContext.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ using System.Threading;
+@@ -30,11 +30,14 @@ static MediaContext()
+         {
+             long qpcCurrentTime;
+ 
+-            SafeNativeMethods.QueryPerformanceFrequency(out _perfCounterFreq);
++            if (OperatingSystem.IsWindows())
++                SafeNativeMethods.QueryPerformanceFrequency(out _perfCounterFreq);
++            else
++                _perfCounterFreq = Stopwatch.Frequency;
+ 
+             if (IsClockSupported)
+             {
+-                SafeNativeMethods.QueryPerformanceCounter(out qpcCurrentTime);
++                qpcCurrentTime = GetTimestamp();
+             }
+             else
+             {
+@@ -44,6 +47,15 @@ static MediaContext()
+             EventTrace.EasyTraceEvent(EventTrace.Keyword.KeywordGraphics, EventTrace.Event.WClientQPCFrequency, _perfCounterFreq, qpcCurrentTime);
+         }
+ 
++        private static long GetTimestamp()
++        {
++            if (!OperatingSystem.IsWindows())
++                return Stopwatch.GetTimestamp();
++
++            SafeNativeMethods.QueryPerformanceCounter(out long timestamp);
++            return timestamp;
++        }
++
+         /// <summary>
+         /// Returns true if the MediaContext can return current time values,
+         /// false otherwise.
+@@ -190,7 +202,7 @@ internal MediaContext(Dispatcher dispatcher)
+             // Initialize frame time information
+             if (IsClockSupported)
+             {
+-                SafeNativeMethods.QueryPerformanceCounter(out _lastPresentationTime);
++                _lastPresentationTime = GetTimestamp();
+                 _estimatedNextPresentationTime = TimeSpan.FromTicks(CountsToTicks(_lastPresentationTime));
+             }
+ 
+@@ -204,10 +216,11 @@ internal MediaContext(Dispatcher dispatcher)
+             _renderModeMessage = new DispatcherOperationCallback(InvalidateRenderMode);
+ 
+             // Create a notification window to listen for broadcast window messages
+-            _notificationWindow = new MediaContextNotificationWindow(this);
++            if (OperatingSystem.IsWindows())
++                _notificationWindow = new MediaContextNotificationWindow(this);
+ 
+             // Connect to the MediaSystem.
+-            if (MediaSystem.Startup(this))
++            if (OperatingSystem.IsWindows() && MediaSystem.Startup(this))
+             {
+                 _isConnected = MediaSystem.ConnectChannels(this);
+             }
+@@ -883,7 +896,7 @@ internal static long CurrentTicks
+             get
+             {
+                 long counts;
+-                SafeNativeMethods.QueryPerformanceCounter(out counts);
++                counts = GetTimestamp();
+                 return CountsToTicks(counts);
+             }
+         }
+@@ -1077,7 +1090,7 @@ TimeSpan IClock.CurrentTime
+                 Debug.Assert(IsClockSupported, "MediaContext.CurrentTime called when QueryPerformaceCounter is not supported");
+ 
+                 long counts;
+-                SafeNativeMethods.QueryPerformanceCounter(out counts);
++                counts = GetTimestamp();
+ 
+                 long countsTicks = CountsToTicks(counts);
+ 
+@@ -1424,7 +1437,7 @@ public virtual void Dispose()
+                 _registeredICompositionTargets = null;
+ 
+                 // Dispose the notification window
+-                _notificationWindow.Dispose();
++                _notificationWindow?.Dispose();
+ 
+                 // Unhook the context destroy event handler -------------------
+                 Dispatcher.ShutdownFinished -= _destroyHandler;
+@@ -1446,7 +1459,8 @@ public virtual void Dispose()
+                 // state this attempts to re open the transport.
+ 
+                 // Disconnect from MediaSystem -------------------------------
+-                MediaSystem.Shutdown(this);
++                if (OperatingSystem.IsWindows())
++                    MediaSystem.Shutdown(this);
+                 _timeManager = null;
+ 
+                 GC.SuppressFinalize(this);
+diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Media/Visual.cs b/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Media/Visual.cs
+index 4bb4321..9c213ea 100644
+--- a/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Media/Visual.cs
++++ b/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Media/Visual.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ // Description:
+@@ -2608,7 +2608,7 @@ protected void AddVisualChild(Visual child)
+             //
+             UIElement.PropagateResumeLayout(this, child);
+ 
+-            if (HwndTarget.IsProcessPerMonitorDpiAware == true && HwndTarget.IsPerMonitorDpiScalingEnabled)
++            if (OperatingSystem.IsWindows() && HwndTarget.IsProcessPerMonitorDpiAware == true && HwndTarget.IsPerMonitorDpiScalingEnabled)
+             {
+                 bool flag1 = CheckFlagsAnd(VisualFlags.DpiScaleFlag1);
+                 bool flag2 = CheckFlagsAnd(VisualFlags.DpiScaleFlag2);
+diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/UIElement.cs b/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/UIElement.cs
+index 5c67a74..59c6da0 100644
+--- a/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/UIElement.cs
++++ b/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/UIElement.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ //
+@@ -1127,6 +1127,10 @@ internal static Rect RoundLayoutRect(Rect rect, double dpiScaleX, double dpiScal
+         /// </remarks>
+         internal static DpiScale EnsureDpiScale()
+         {
++            // ponytail: headless layout uses 96 DPI until the platform host supplies monitor DPI.
++            if (!OperatingSystem.IsWindows())
++                return new DpiScale(1, 1);
++
+             if (_setDpi)
+             {
+                 _setDpi = false;
 diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/Control.cs b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/Control.cs
 index 95f58ac..c187389 100644
 --- a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/Control.cs
@@ -172,6 +315,33 @@ index 45a5a78..db27be6 100644
                  lock (_cacheValid)
                  {
                      while (!_cacheValid[(int)CacheSlot.KeyboardCues])
+diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Window.cs b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Window.cs
+index 257eed0..0db075c 100644
+--- a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Window.cs
++++ b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Window.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ using System.Collections;
+@@ -72,10 +72,12 @@ static Window()
+             RenderTransformProperty.OverrideMetadata(typeof(Window), new FrameworkPropertyMetadata(Transform.Identity, new PropertyChangedCallback(_OnRenderTransformChanged), new CoerceValueCallback(CoerceRenderTransform)));
+             ClipToBoundsProperty.OverrideMetadata(typeof(Window), new FrameworkPropertyMetadata(BooleanBoxes.FalseBox, new PropertyChangedCallback(_OnClipToBoundsChanged), new CoerceValueCallback(CoerceClipToBounds)));
+ 
+-            // Note that this event only gets raised in Windows 7 and later.
+-            WM_TASKBARBUTTONCREATED = UnsafeNativeMethods.RegisterWindowMessage("TaskbarButtonCreated");
+-
+-            WM_APPLYTASKBARITEMINFO = UnsafeNativeMethods.RegisterWindowMessage("WPF_ApplyTaskbarItemInfo");
++            if (OperatingSystem.IsWindows())
++            {
++                // Note that this event only gets raised in Windows 7 and later.
++                WM_TASKBARBUTTONCREATED = UnsafeNativeMethods.RegisterWindowMessage("TaskbarButtonCreated");
++                WM_APPLYTASKBARITEMINFO = UnsafeNativeMethods.RegisterWindowMessage("WPF_ApplyTaskbarItemInfo");
++            }
+ 
+             EventManager.RegisterClassHandler(typeof(Window),
+                 UIElement.ManipulationCompletedEvent,
 diff --git a/src/Microsoft.DotNet.Wpf/src/Shared/MS/Utility/Trace.cs b/src/Microsoft.DotNet.Wpf/src/Shared/MS/Utility/Trace.cs
 index 0ca283f..8a4232e 100644
 --- a/src/Microsoft.DotNet.Wpf/src/Shared/MS/Utility/Trace.cs

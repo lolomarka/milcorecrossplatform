@@ -1,0 +1,6 @@
+**/bin/
+**/obj/
+.cache/
+/upstream/
+/artifacts/
+/upstream-build.log

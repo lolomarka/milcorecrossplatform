@@ -1,0 +1,394 @@
+diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationCore/ModuleInitializer.cs b/src/Microsoft.DotNet.Wpf/src/PresentationCore/ModuleInitializer.cs
+index fe58319..22421f6 100644
+--- a/src/Microsoft.DotNet.Wpf/src/PresentationCore/ModuleInitializer.cs
++++ b/src/Microsoft.DotNet.Wpf/src/PresentationCore/ModuleInitializer.cs
+@@ -19,6 +19,14 @@ internal static class ModuleInitializer
+ #pragma warning disable CA2255
+     [ModuleInitializer]
+     public static void Initialize()
++    {
++        if (OperatingSystem.IsWindows())
++            InitializeWindows();
++    }
++
++    // Keep DirectWriteForwarder references out of the initializer's JIT compilation.
++    [MethodImpl(MethodImplOptions.NoInlining)]
++    private static void InitializeWindows()
+     {
+         IsProcessDpiAware();
+ 
+diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Input/InputManager.cs b/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Input/InputManager.cs
+index 6dff5b1..6e02e8c 100644
+--- a/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Input/InputManager.cs
++++ b/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Input/InputManager.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ using System.Collections;
+@@ -139,7 +139,7 @@ private InputManager()
+             // Avalon doesn't necessarily require STA, but many components do.  Examples
+             // include Cicero, OLE, COM, etc.  So we throw an exception here if the
+             // thread is not STA.
+-            if(Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
++            if (OperatingSystem.IsWindows() && Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
+             {
+                 throw new InvalidOperationException(SR.RequiresSTA);
+             }
+diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Input/InputMethod.cs b/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Input/InputMethod.cs
+index b96115b..fb2eda7 100644
+--- a/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Input/InputMethod.cs
++++ b/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Input/InputMethod.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ // Description: Manage Input Methods (EA-IME, TextServicesFramework).
+@@ -1778,7 +1778,7 @@ private IntPtr DefaultImc
+         private DefaultTextStore _defaulttextstore;
+ 
+         // If the system is IMM enabled, this is true.
+-        private static bool _immEnabled = SafeSystemMetrics.IsImmEnabled ; 
++        private static bool _immEnabled = OperatingSystem.IsWindows() && SafeSystemMetrics.IsImmEnabled;
+ 
+         // the default imc. The default imc is per thread and we cache it in ThreadStatic.
+         [ThreadStatic]
+diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Input/MouseDevice.cs b/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Input/MouseDevice.cs
+index 2af814e..7298e71 100644
+--- a/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Input/MouseDevice.cs
++++ b/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Input/MouseDevice.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ using System.Collections;
+@@ -35,9 +35,9 @@ internal MouseDevice(InputManager inputManager)
+             //
+             // The call here goes into the safe helper calls, more of a consistency in approach
+             //
+-            _doubleClickDeltaX = SafeSystemMetrics.DoubleClickDeltaX;
+-            _doubleClickDeltaY = SafeSystemMetrics.DoubleClickDeltaY;
+-            _doubleClickDeltaTime = SafeNativeMethods.GetDoubleClickTime();
++            _doubleClickDeltaX = OperatingSystem.IsWindows() ? SafeSystemMetrics.DoubleClickDeltaX : 4;
++            _doubleClickDeltaY = OperatingSystem.IsWindows() ? SafeSystemMetrics.DoubleClickDeltaY : 4;
++            _doubleClickDeltaTime = OperatingSystem.IsWindows() ? SafeNativeMethods.GetDoubleClickTime() : 500;
+ 
+             _overIsEnabledChangedEventHandler = new DependencyPropertyChangedEventHandler(OnOverIsEnabledChanged);
+             _overIsVisibleChangedEventHandler = new DependencyPropertyChangedEventHandler(OnOverIsVisibleChanged);
+diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/Control.cs b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/Control.cs
+index 95f58ac..c187389 100644
+--- a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/Control.cs
++++ b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/Control.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ 
+@@ -133,7 +133,7 @@ public Brush Background
+         public static readonly DependencyProperty ForegroundProperty =
+                 TextElement.ForegroundProperty.AddOwner(
+                         typeof(Control),
+-                        new FrameworkPropertyMetadata(SystemColors.ControlTextBrush,
++                        new FrameworkPropertyMetadata(OperatingSystem.IsWindows() ? SystemColors.ControlTextBrush : Brushes.Black,
+                             FrameworkPropertyMetadataOptions.Inherits));
+ 
+         /// <summary>
+diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/SystemFonts.cs b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/SystemFonts.cs
+index 00fe5a2..8868188 100644
+--- a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/SystemFonts.cs
++++ b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/SystemFonts.cs
+@@ -415,7 +415,7 @@ public static double MessageFontSize
+         {
+             get
+             {
+-                return ConvertFontHeight(SystemParameters.NonClientMetrics.lfMessageFont.lfHeight);
++                return OperatingSystem.IsWindows() ? ConvertFontHeight(SystemParameters.NonClientMetrics.lfMessageFont.lfHeight) : 12.0;
+             }
+         }
+ 
+@@ -444,7 +444,7 @@ public static FontFamily MessageFontFamily
+             {
+                 if (_messageFontFamily == null)
+                 {
+-                    _messageFontFamily = new FontFamily(SystemParameters.NonClientMetrics.lfMessageFont.lfFaceName);
++                    _messageFontFamily = new FontFamily(OperatingSystem.IsWindows() ? SystemParameters.NonClientMetrics.lfMessageFont.lfFaceName : "DejaVu Sans");
+                 }
+ 
+                 return _messageFontFamily;
+@@ -459,7 +459,7 @@ public static FontStyle MessageFontStyle
+         {
+             get
+             {
+-                return (SystemParameters.NonClientMetrics.lfMessageFont.lfItalic != 0) ? FontStyles.Italic : FontStyles.Normal;
++                return (OperatingSystem.IsWindows() && SystemParameters.NonClientMetrics.lfMessageFont.lfItalic != 0) ? FontStyles.Italic : FontStyles.Normal;
+             }
+         }
+ 
+@@ -470,7 +470,7 @@ public static FontWeight MessageFontWeight
+         {
+             get
+             {
+-                return FontWeight.FromOpenTypeWeight(SystemParameters.NonClientMetrics.lfMessageFont.lfWeight);
++                return OperatingSystem.IsWindows() ? FontWeight.FromOpenTypeWeight(SystemParameters.NonClientMetrics.lfMessageFont.lfWeight) : FontWeights.Normal;
+             }
+         }
+ 
+@@ -485,12 +485,12 @@ public static TextDecorationCollection MessageFontTextDecorations
+                 {
+                     _messageFontTextDecorations = new TextDecorationCollection();
+ 
+-                    if (SystemParameters.NonClientMetrics.lfMessageFont.lfUnderline != 0)
++                    if (OperatingSystem.IsWindows() && SystemParameters.NonClientMetrics.lfMessageFont.lfUnderline != 0)
+                     {
+                         CopyTextDecorationCollection(TextDecorations.Underline, _messageFontTextDecorations);
+                     }
+ 
+-                    if (SystemParameters.NonClientMetrics.lfMessageFont.lfStrikeOut != 0)
++                    if (OperatingSystem.IsWindows() && SystemParameters.NonClientMetrics.lfMessageFont.lfStrikeOut != 0)
+                     {
+                         CopyTextDecorationCollection(TextDecorations.Strikethrough, _messageFontTextDecorations);
+                     }
+diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/SystemParameters.cs b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/SystemParameters.cs
+index 45a5a78..db27be6 100644
+--- a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/SystemParameters.cs
++++ b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/SystemParameters.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ using System.Collections;
+@@ -566,6 +566,9 @@ public static bool KeyboardCues
+         {
+             get
+             {
++                if (!OperatingSystem.IsWindows())
++                    return false;
++
+                 lock (_cacheValid)
+                 {
+                     while (!_cacheValid[(int)CacheSlot.KeyboardCues])
+diff --git a/src/Microsoft.DotNet.Wpf/src/Shared/MS/Utility/Trace.cs b/src/Microsoft.DotNet.Wpf/src/Shared/MS/Utility/Trace.cs
+index 0ca283f..8a4232e 100644
+--- a/src/Microsoft.DotNet.Wpf/src/Shared/MS/Utility/Trace.cs
++++ b/src/Microsoft.DotNet.Wpf/src/Shared/MS/Utility/Trace.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ // Implements ETW tracing for Avalon Managed Code
+@@ -23,7 +23,7 @@ internal static void EasyTraceEvent(Keyword keywords, Event eventID)
+         {
+             if (IsEnabled(keywords, Level.Info))
+             {
+-                EventProvider.TraceEvent(eventID, keywords, Level.Info);
++                EventProvider?.TraceEvent(eventID, keywords, Level.Info);
+             }
+         }
+ 
+@@ -33,7 +33,7 @@ internal static void EasyTraceEvent(Keyword keywords, Level level, Event eventID
+         {
+             if (IsEnabled(keywords, level))
+             {
+-                EventProvider.TraceEvent(eventID, keywords, level);
++                EventProvider?.TraceEvent(eventID, keywords, level);
+             }
+         }
+ 
+@@ -43,7 +43,7 @@ internal static void EasyTraceEvent<T1>(Keyword keywords, Event eventID, T1 para
+         {
+             if (IsEnabled(keywords, Level.Info))
+             {
+-                EventProvider.TraceEvent(eventID, keywords, Level.Info, param1);
++                EventProvider?.TraceEvent(eventID, keywords, Level.Info, param1);
+             }
+         }
+ 
+@@ -53,7 +53,7 @@ internal static void EasyTraceEvent<T1>(Keyword keywords, Level level, Event eve
+         {
+             if (IsEnabled(keywords, level))
+             {
+-                EventProvider.TraceEvent(eventID, keywords, level, param1);
++                EventProvider?.TraceEvent(eventID, keywords, level, param1);
+             }
+         }
+ 
+@@ -63,7 +63,7 @@ internal static void EasyTraceEvent<T1, T2>(Keyword keywords, Event eventID, T1
+         {
+             if (IsEnabled(keywords, Level.Info))
+             {
+-                EventProvider.TraceEvent(eventID, keywords, Level.Info, param1, param2);
++                EventProvider?.TraceEvent(eventID, keywords, Level.Info, param1, param2);
+             }
+         }
+ 
+@@ -71,7 +71,7 @@ internal static void EasyTraceEvent<T1, T2>(Keyword keywords, Level level, Event
+         {
+             if (IsEnabled(keywords, Level.Info))
+             {
+-                EventProvider.TraceEvent(eventID, keywords, Level.Info, param1, param2);
++                EventProvider?.TraceEvent(eventID, keywords, Level.Info, param1, param2);
+             }
+         }
+ 
+@@ -81,7 +81,7 @@ internal static void EasyTraceEvent<T1, T2, T3>(Keyword keywords, Event eventID,
+         {
+             if (IsEnabled(keywords, Level.Info))
+             {
+-                EventProvider.TraceEvent(eventID, keywords, Level.Info, param1, param2, param3);
++                EventProvider?.TraceEvent(eventID, keywords, Level.Info, param1, param2, param3);
+             }
+         }
+ 
+@@ -101,7 +101,7 @@ public enum LayoutSource : byte
+         /// </summary>
+         internal static bool IsEnabled(Keyword flag, Level level)
+         {
+-            return EventProvider.IsEnabled(flag, level);
++            return EventProvider?.IsEnabled(flag, level) ?? false;
+         }
+ 
+         /// <summary>
+@@ -110,6 +110,9 @@ internal static bool IsEnabled(Keyword flag, Level level)
+         /// </summary>
+         static EventTrace()
+         {
++            if (!OperatingSystem.IsWindows())
++                return;
++
+             Guid providerGuid = new Guid("E13B77A8-14B6-11DE-8069-001B212B5009");
+ 
+             if (Environment.OSVersion.Version.Major < 6 ||
+diff --git a/src/Microsoft.DotNet.Wpf/src/WindowsBase/MS/Internal/AvTrace.cs b/src/Microsoft.DotNet.Wpf/src/WindowsBase/MS/Internal/AvTrace.cs
+index ccc8596..1642cab 100644
+--- a/src/Microsoft.DotNet.Wpf/src/WindowsBase/MS/Internal/AvTrace.cs
++++ b/src/Microsoft.DotNet.Wpf/src/WindowsBase/MS/Internal/AvTrace.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ // This class wraps a System.Diagnostics.TraceSource.  The purpose of
+@@ -204,6 +204,9 @@ private static bool ShouldCreateTraceSources()
+ 
+         internal static bool IsWpfTracingEnabledInRegistry()
+         {
++            if (!OperatingSystem.IsWindows())
++                return false;
++
+             // First time this is called, initialize from the registry
+ 
+             if( _enabledInRegistry == null )
+@@ -236,7 +239,7 @@ internal static bool IsWpfTracingEnabledInRegistry()
+ 
+         internal static bool IsDebuggerAttached()
+         {
+-            return Debugger.IsAttached || SafeNativeMethods.IsDebuggerPresent();
++            return Debugger.IsAttached || (OperatingSystem.IsWindows() && SafeNativeMethods.IsDebuggerPresent());
+         }
+ 
+ 
+diff --git a/src/Microsoft.DotNet.Wpf/src/WindowsBase/System/Windows/Threading/Dispatcher.cs b/src/Microsoft.DotNet.Wpf/src/WindowsBase/System/Windows/Threading/Dispatcher.cs
+index 9b6b1dd..9993f8d 100644
+--- a/src/Microsoft.DotNet.Wpf/src/WindowsBase/System/Windows/Threading/Dispatcher.cs
++++ b/src/Microsoft.DotNet.Wpf/src/WindowsBase/System/Windows/Threading/Dispatcher.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ using MS.Win32;
+@@ -21,7 +21,8 @@ public sealed class Dispatcher
+     {
+         static Dispatcher()
+         {
+-            _msgProcessQueue = UnsafeNativeMethods.RegisterWindowMessage("DispatcherProcessQueue");
++            if (OperatingSystem.IsWindows())
++                _msgProcessQueue = UnsafeNativeMethods.RegisterWindowMessage("DispatcherProcessQueue");
+             _globalLock = new object();
+             _dispatchers = new List<WeakReference>();
+             _possibleDispatcher = new WeakReference(null);
+@@ -1734,10 +1735,16 @@ private Dispatcher()
+ 
+             // Create the message-only window we use to receive messages
+             // that tell us to process the queue.
+-            _window = new MessageOnlyHwndWrapper();
+-
+-            _hook = new HwndWrapperHook(WndProcHook);
+-            _window.AddHook(_hook);
++            if (OperatingSystem.IsWindows())
++            {
++                _window = new MessageOnlyHwndWrapper();
++                _hook = new HwndWrapperHook(WndProcHook);
++                _window.AddHook(_hook);
++            }
++            else
++            {
++                _managedWakeup = new AutoResetEvent(false);
++            }
+ 
+             // Verify that the accessibility switches are set prior to any major UI code running.
+             AccessibilitySwitches.VerifySwitches(this);
+@@ -1846,8 +1853,10 @@ private void ShutdownImplInSecurityContext(Object state)
+             {
+                 window = _window;
+                 _window = null;
++                _managedWakeup?.Dispose();
++                _managedWakeup = null;
+             }
+-            window.Dispose();
++            window?.Dispose();
+ 
+             // Mark this dispatcher as shut down.  Attempts to BeginInvoke
+             // or Invoke will result in an exception.
+@@ -1983,7 +1992,7 @@ private void ProcessQueue()
+ 
+                 // We can only do background processing if there is
+                 // no input in the Win32 queue.
+-                bool backgroundProcessingOK = !IsInputPending();
++                bool backgroundProcessingOK = _managedWakeup != null || !IsInputPending();
+ 
+                 maxPriority = _queue.MaxPriority;
+ 
+@@ -2061,6 +2070,18 @@ private void PushFrameImpl(DispatcherFrame frame)
+                 {
+                     while(frame.Continue)
+                     {
++                        if (_managedWakeup != null)
++                        {
++                            int timeout = _dueTimeFound ? Math.Max(0, _dueTimeInTicks - Environment.TickCount) : Timeout.Infinite;
++                            _managedWakeup.WaitOne(timeout);
++                            if (!frame.Continue)
++                                break;
++
++                            PromoteTimers(Environment.TickCount);
++                            ProcessQueue();
++                            continue;
++                        }
++
+                         if (!GetMessage(ref msg, IntPtr.Zero, 0, 0))
+                             break;
+ 
+@@ -2327,6 +2348,9 @@ internal bool CriticalRequestProcessing(bool force)
+             // This method is called from within the instance lock.  So we
+             // can reliably check the _window field without worrying about
+             // it being changed out from underneath us during shutdown.
++            if (!OperatingSystem.IsWindows())
++                return _managedWakeup?.Set() ?? false;
++
+             if (IsWindowNull())
+                 return false;
+ 
+@@ -2820,6 +2844,7 @@ private object[] CombineParameters(object arg, object[] args)
+         private static PriorityRange _backgroundPriorityRange = new PriorityRange(DispatcherPriority.Background, true, DispatcherPriority.Input, true);
+         private static PriorityRange _idlePriorityRange = new PriorityRange(DispatcherPriority.SystemIdle, true, DispatcherPriority.ContextIdle, true);
+ 
++        private AutoResetEvent _managedWakeup;
+         private MessageOnlyHwndWrapper _window;
+ 
+         private HwndWrapperHook _hook;

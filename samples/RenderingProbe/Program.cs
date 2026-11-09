@@ -1,12 +1,31 @@
 using System;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using W = System.Windows;
 using M = System.Windows.Media;
 
 namespace CrossWpf.RenderingProbe;
 
-public sealed class ProbeApplication : Application { }
+public sealed class ProbeApplication : Application
+{
+    public override void OnFrameworkInitializationCompleted()
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            desktop.MainWindow = new Window
+            {
+                Title = "CrossWpf rendering probe",
+                Width = 320,
+                Height = 240,
+                Content = new WpfVisualPresenter(Program.CreateScene(out _))
+            };
+        }
+
+        base.OnFrameworkInitializationCompleted();
+    }
+}
 
 public sealed class WpfVisualPresenter : Avalonia.Controls.Control
 {
@@ -130,22 +149,20 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        if (args is ["--window"])
+        {
+            AppBuilder.Configure<ProbeApplication>()
+                .UsePlatformDetect()
+                .StartWithClassicDesktopLifetime(Array.Empty<string>());
+            return;
+        }
+
         AppBuilder.Configure<ProbeApplication>()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
             .UseSkia()
             .SetupWithoutStarting();
 
-        var root = new W.Controls.Grid { Background = M.Brushes.White };
-        var rectangle = new W.Shapes.Rectangle
-        {
-            Width = 80,
-            Height = 60,
-            Fill = M.Brushes.Red,
-            HorizontalAlignment = W.HorizontalAlignment.Left,
-            VerticalAlignment = W.VerticalAlignment.Top,
-            Margin = new W.Thickness(20, 20, 0, 0)
-        };
-        root.Children.Add(rectangle);
+        var root = CreateScene(out var rectangle);
         var presenter = new WpfVisualPresenter(root);
         var output = args.Length == 0 ? "rendering-probe" : args[0];
         System.IO.Directory.CreateDirectory(output);
@@ -159,6 +176,22 @@ public static class Program
         AssertPixel(output + "/after.png", 40, 30, 127, 127, 255);
         AssertPixel(output + "/after.png", 80, 30, 255, 255, 255);
         Console.WriteLine("PASS: WPF layout and visual drawings rendered through Avalonia/Skia; fill, opacity, transform, clip and resize verified.");
+    }
+
+    internal static W.Controls.Grid CreateScene(out W.Shapes.Rectangle rectangle)
+    {
+        var root = new W.Controls.Grid { Background = M.Brushes.White };
+        rectangle = new W.Shapes.Rectangle
+        {
+            Width = 80,
+            Height = 60,
+            Fill = M.Brushes.Red,
+            HorizontalAlignment = W.HorizontalAlignment.Left,
+            VerticalAlignment = W.VerticalAlignment.Top,
+            Margin = new W.Thickness(20, 20, 0, 0)
+        };
+        root.Children.Add(rectangle);
+        return root;
     }
 
     private static void Render(WpfVisualPresenter presenter, string path, int width, int height)

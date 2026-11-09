@@ -86,3 +86,11 @@ wsl -d Debian -- timeout 20s env DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 ./artif
 ```
 
 The probe renders two PNGs from WPF drawings after explicit Measure and Arrange passes. Pixel checks cover fill, opacity, translation, clipping, and resize. The Linux path uses a managed composition lock and renders without a window.
+
+Use `--window` to display the same WPF scene in an Avalonia desktop window. On Debian the window mode requires an X11 display and Avalonia's X11 runtime libraries, including libICE and libSM.
+
+```powershell
+wsl -d Debian -- env DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 ./artifacts/rendering-linux/RenderingProbe --window
+```
+
+The window displays the WPF rectangle. It does not yet forward input to WPF or synchronize its dispatcher with Avalonia.

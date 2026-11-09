@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using W = System.Windows;
 using M = System.Windows.Media;
+using I = System.Windows.Input;
 
 namespace CrossWpf.RenderingProbe;
 
@@ -14,13 +15,39 @@ public sealed class ProbeApplication : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new Window
+            var root = Program.CreateScene(out var rectangle);
+            var presenter = new WpfVisualPresenter(root);
+            var window = new Window
             {
                 Title = "CrossWpf rendering probe",
                 Width = 320,
                 Height = 240,
-                Content = new WpfVisualPresenter(Program.CreateScene(out _))
+                Content = presenter
             };
+            int clicks = 0;
+            root.MouseDown += (_, args) =>
+            {
+                if (args.ChangedButton != I.MouseButton.Left)
+                    return;
+
+                clicks++;
+                rectangle.Fill = clicks % 2 == 0 ? M.Brushes.Red : M.Brushes.Blue;
+                window.Title = $"CrossWpf rendering probe - clicks: {clicks}";
+                presenter.InvalidateArrange();
+                presenter.InvalidateVisual();
+            };
+            window.PointerPressed += (_, args) =>
+            {
+                if (args.GetCurrentPoint(presenter).Properties.PointerUpdateKind != Avalonia.Input.PointerUpdateKind.LeftButtonPressed)
+                    return;
+
+                // ponytail: route to the root until the host supports WPF hit testing and pointer state.
+                root.RaiseEvent(new I.MouseButtonEventArgs(I.Mouse.PrimaryDevice, Environment.TickCount, I.MouseButton.Left)
+                {
+                    RoutedEvent = I.Mouse.MouseDownEvent
+                });
+            };
+            desktop.MainWindow = window;
         }
 
         base.OnFrameworkInitializationCompleted();

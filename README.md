@@ -93,4 +93,4 @@ Use `--window` to display the same WPF scene in an Avalonia desktop window. On D
 wsl -d Debian -- env DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 ./artifacts/rendering-linux/RenderingProbe --window
 ```
 
-The window displays the WPF rectangle. It does not yet forward input to WPF or synchronize its dispatcher with Avalonia.
+A left click raises WPF MouseDown on the root Grid. The WPF handler changes the rectangle fill, updates the window title with the click count, and invalidates the presenter. The probe currently routes clicks to the root. WPF hit testing, pointer state, and dispatcher integration remain future work.

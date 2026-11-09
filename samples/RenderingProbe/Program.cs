@@ -6,6 +6,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using W = System.Windows;
 using M = System.Windows.Media;
 using I = System.Windows.Input;
+using T = System.Windows.Threading;
 
 namespace CrossWpf.RenderingProbe;
 
@@ -30,11 +31,14 @@ public sealed class ProbeApplication : Application
                 if (args.ChangedButton != I.MouseButton.Left)
                     return;
 
-                clicks++;
-                rectangle.Fill = clicks % 2 == 0 ? M.Brushes.Red : M.Brushes.Blue;
-                window.Title = $"CrossWpf rendering probe - clicks: {clicks}";
-                presenter.InvalidateArrange();
-                presenter.InvalidateVisual();
+                root.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    clicks++;
+                    rectangle.Fill = clicks % 2 == 0 ? M.Brushes.Red : M.Brushes.Blue;
+                    window.Title = $"CrossWpf rendering probe - clicks: {clicks}";
+                    presenter.InvalidateArrange();
+                    presenter.InvalidateVisual();
+                }));
             };
             window.PointerPressed += (_, args) =>
             {
@@ -47,6 +51,15 @@ public sealed class ProbeApplication : Application
                     RoutedEvent = I.Mouse.MouseDownEvent
                 });
             };
+            if (!OperatingSystem.IsWindows())
+            {
+                // ponytail: poll for the probe until WPF exposes a host wakeup hook.
+                var pump = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+                pump.Tick += (_, _) => root.Dispatcher.Invoke(() => { }, T.DispatcherPriority.Background);
+                window.Closed += (_, _) => pump.Stop();
+                pump.Start();
+            }
+
             desktop.MainWindow = window;
         }
 

@@ -26,7 +26,7 @@ public sealed class ProbeApplication : Application
                 Content = presenter
             };
             int clicks = 0;
-            root.MouseDown += (_, args) =>
+            rectangle.MouseDown += (_, args) =>
             {
                 if (args.ChangedButton != I.MouseButton.Left)
                     return;
@@ -45,8 +45,17 @@ public sealed class ProbeApplication : Application
                 if (args.GetCurrentPoint(presenter).Properties.PointerUpdateKind != Avalonia.Input.PointerUpdateKind.LeftButtonPressed)
                     return;
 
-                // ponytail: route to the root until the host supports WPF hit testing and pointer state.
-                root.RaiseEvent(new I.MouseButtonEventArgs(I.Mouse.PrimaryDevice, Environment.TickCount, I.MouseButton.Left)
+                var point = args.GetPosition(presenter);
+                // ponytail: the window scene has one untransformed rectangle; general geometry needs a hit-test backend.
+                var offset = M.VisualTreeHelper.GetOffset(rectangle);
+                var bounds = new W.Rect(new W.Point(offset.X, offset.Y), rectangle.RenderSize);
+                if (!rectangle.IsEnabled || !rectangle.IsHitTestVisible ||
+                    !bounds.Contains(new W.Point(point.X, point.Y)))
+                {
+                    return;
+                }
+
+                rectangle.RaiseEvent(new I.MouseButtonEventArgs(I.Mouse.PrimaryDevice, Environment.TickCount, I.MouseButton.Left)
                 {
                     RoutedEvent = I.Mouse.MouseDownEvent
                 });

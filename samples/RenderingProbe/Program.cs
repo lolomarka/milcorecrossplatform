@@ -25,6 +25,32 @@ public sealed class ProbeApplication : Application
                 Height = 240,
                 Content = presenter
             };
+            var dispatcher = root.Dispatcher;
+            if (!OperatingSystem.IsWindows())
+            {
+                // ponytail: wake for active queue operations in this probe; a full host must also schedule WPF timer deadlines.
+                bool closed = false;
+                T.DispatcherHookEventHandler wake = (_, args) =>
+                {
+                    if (args.Operation.Priority <= T.DispatcherPriority.SystemIdle)
+                        return;
+
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        if (!closed)
+                            dispatcher.Invoke(() => { }, T.DispatcherPriority.SystemIdle);
+                    }, Avalonia.Threading.DispatcherPriority.Background);
+                };
+                dispatcher.Hooks.OperationPosted += wake;
+                dispatcher.Hooks.OperationPriorityChanged += wake;
+                window.Closed += (_, _) =>
+                {
+                    closed = true;
+                    dispatcher.Hooks.OperationPosted -= wake;
+                    dispatcher.Hooks.OperationPriorityChanged -= wake;
+                };
+            }
+
             int clicks = 0;
             rectangle.MouseDown += (_, args) =>
             {
@@ -60,15 +86,6 @@ public sealed class ProbeApplication : Application
                     RoutedEvent = I.Mouse.MouseDownEvent
                 });
             };
-            if (!OperatingSystem.IsWindows())
-            {
-                // ponytail: poll for the probe until WPF exposes a host wakeup hook.
-                var pump = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-                pump.Tick += (_, _) => root.Dispatcher.Invoke(() => { }, T.DispatcherPriority.Background);
-                window.Closed += (_, _) => pump.Stop();
-                pump.Start();
-            }
-
             desktop.MainWindow = window;
         }
 

@@ -93,4 +93,4 @@ Use `--window` to display the same WPF scene in an Avalonia desktop window. On D
 wsl -d Debian -- env DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 ./artifacts/rendering-linux/RenderingProbe --window
 ```
 
-A left click inside the WPF rectangle raises MouseDown on that rectangle. The probe uses the rectangle offset and RenderSize for this check. The WPF handler queues the fill, click count, and presenter update through Dispatcher.BeginInvoke. On Linux, an Avalonia timer pumps the WPF queue on the UI thread every 16 ms and stops when the window closes. General WPF geometry hit testing, pointer state, and a host-driven wakeup hook remain future work.
+A left click inside the WPF rectangle raises MouseDown on that rectangle. The probe uses the rectangle offset and RenderSize for this check. The WPF handler queues the fill, click count, and presenter update through Dispatcher.BeginInvoke. On Linux, WPF operation hooks wake the Avalonia UI thread for priorities above SystemIdle. The window unsubscribes on close. WPF timer deadlines need a separate host integration. General WPF geometry hit testing, and pointer state remain future work.

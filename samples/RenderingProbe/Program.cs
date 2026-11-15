@@ -25,32 +25,45 @@ public sealed class ProbeApplication : Application
                 Height = 240,
                 Content = presenter
             };
+#if FORK_LINUX
             var dispatcher = root.Dispatcher;
-            if (!OperatingSystem.IsWindows())
-            {
-                // ponytail: wake for active queue operations in this probe; a full host must also schedule WPF timer deadlines.
-                bool closed = false;
-                T.DispatcherHookEventHandler wake = (_, args) =>
-                {
-                    if (args.Operation.Priority <= T.DispatcherPriority.SystemIdle)
-                        return;
+            var timer = new Avalonia.Threading.DispatcherTimer();
+            bool closed = false;
+            int posted = 0;
 
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        if (!closed)
-                            dispatcher.Invoke(() => { }, T.DispatcherPriority.SystemIdle);
-                    }, Avalonia.Threading.DispatcherPriority.Background);
-                };
-                dispatcher.Hooks.OperationPosted += wake;
-                dispatcher.Hooks.OperationPriorityChanged += wake;
-                window.Closed += (_, _) =>
+            void ProcessWork()
+            {
+                timer.Stop();
+                if (closed)
+                    return;
+
+                int delay = dispatcher.ProcessManagedHostWork();
+                if (!closed && delay >= 0)
                 {
-                    closed = true;
-                    dispatcher.Hooks.OperationPosted -= wake;
-                    dispatcher.Hooks.OperationPriorityChanged -= wake;
-                };
+                    timer.Interval = TimeSpan.FromMilliseconds(delay);
+                    timer.Start();
+                }
             }
 
+            timer.Tick += (_, _) => ProcessWork();
+            dispatcher.SetManagedHostWakeup(() =>
+            {
+                if (System.Threading.Interlocked.Exchange(ref posted, 1) != 0)
+                    return;
+
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    System.Threading.Interlocked.Exchange(ref posted, 0);
+                    ProcessWork();
+                }, Avalonia.Threading.DispatcherPriority.Background);
+            });
+            window.Closed += (_, _) =>
+            {
+                closed = true;
+                dispatcher.SetManagedHostWakeup(null);
+                timer.Stop();
+            };
+#endif
             int clicks = 0;
             rectangle.MouseDown += (_, args) =>
             {
@@ -87,6 +100,27 @@ public sealed class ProbeApplication : Application
                 });
             };
             desktop.MainWindow = window;
+#if FORK_LINUX
+            if (desktop.Args is ["--window-dispatcher-smoke"])
+            {
+                window.Opened += (_, _) =>
+                {
+                    System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+                        dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            dispatcher.VerifyAccess();
+                            var testTimer = new T.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+                            testTimer.Tick += (_, _) =>
+                            {
+                                testTimer.Stop();
+                                Console.WriteLine("PASS: cross-thread SystemIdle operation and WPF timer on the Avalonia UI thread.");
+                                window.Close();
+                            };
+                            testTimer.Start();
+                        }), T.DispatcherPriority.SystemIdle));
+                };
+            }
+#endif
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -215,11 +249,11 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        if (args is ["--window"])
+        if (args is ["--window"] or ["--window-dispatcher-smoke"])
         {
             AppBuilder.Configure<ProbeApplication>()
                 .UsePlatformDetect()
-                .StartWithClassicDesktopLifetime(Array.Empty<string>());
+                .StartWithClassicDesktopLifetime(args);
             return;
         }
 

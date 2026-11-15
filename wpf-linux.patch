@@ -505,7 +505,7 @@ index ccc8596..1642cab 100644
  
  
 diff --git a/src/Microsoft.DotNet.Wpf/src/WindowsBase/System/Windows/Threading/Dispatcher.cs b/src/Microsoft.DotNet.Wpf/src/WindowsBase/System/Windows/Threading/Dispatcher.cs
-index 9b6b1dd..9993f8d 100644
+index 9b6b1dd..d61be67 100644
 --- a/src/Microsoft.DotNet.Wpf/src/WindowsBase/System/Windows/Threading/Dispatcher.cs
 +++ b/src/Microsoft.DotNet.Wpf/src/WindowsBase/System/Windows/Threading/Dispatcher.cs
 @@ -1,4 +1,4 @@
@@ -545,10 +545,11 @@ index 9b6b1dd..9993f8d 100644
  
              // Verify that the accessibility switches are set prior to any major UI code running.
              AccessibilitySwitches.VerifySwitches(this);
-@@ -1846,8 +1853,10 @@ private void ShutdownImplInSecurityContext(Object state)
+@@ -1846,8 +1853,11 @@ private void ShutdownImplInSecurityContext(Object state)
              {
                  window = _window;
                  _window = null;
++                _hostWakeup = null;
 +                _managedWakeup?.Dispose();
 +                _managedWakeup = null;
              }
@@ -557,7 +558,7 @@ index 9b6b1dd..9993f8d 100644
  
              // Mark this dispatcher as shut down.  Attempts to BeginInvoke
              // or Invoke will result in an exception.
-@@ -1983,7 +1992,7 @@ private void ProcessQueue()
+@@ -1983,7 +1993,7 @@ private void ProcessQueue()
  
                  // We can only do background processing if there is
                  // no input in the Win32 queue.
@@ -566,7 +567,7 @@ index 9b6b1dd..9993f8d 100644
  
                  maxPriority = _queue.MaxPriority;
  
-@@ -2061,6 +2070,18 @@ private void PushFrameImpl(DispatcherFrame frame)
+@@ -2061,6 +2071,18 @@ private void PushFrameImpl(DispatcherFrame frame)
                  {
                      while(frame.Continue)
                      {
@@ -585,21 +586,113 @@ index 9b6b1dd..9993f8d 100644
                          if (!GetMessage(ref msg, IntPtr.Zero, 0, 0))
                              break;
  
-@@ -2327,6 +2348,9 @@ internal bool CriticalRequestProcessing(bool force)
+@@ -2327,6 +2349,18 @@ internal bool CriticalRequestProcessing(bool force)
              // This method is called from within the instance lock.  So we
              // can reliably check the _window field without worrying about
              // it being changed out from underneath us during shutdown.
 +            if (!OperatingSystem.IsWindows())
-+                return _managedWakeup?.Set() ?? false;
++            {
++                if (_managedWakeup == null)
++                    return false;
++
++                _managedWakeup.Set();
++                if (_queue.MaxPriority > DispatcherPriority.Inactive)
++                    _hostWakeup?.Invoke();
++
++                return true;
++            }
 +
              if (IsWindowNull())
                  return false;
  
-@@ -2820,6 +2844,7 @@ private object[] CombineParameters(object arg, object[] args)
+@@ -2636,8 +2670,47 @@ private object UpdateWin32TimerFromDispatcherThread(object unused)
+             return null;
+         }
+ 
++        // The callback may run under the dispatcher lock or on a producer thread.
++        // It must only post work to the host and must not call back into WPF.
++        public void SetManagedHostWakeup(Action wakeup)
++        {
++            VerifyAccess();
++            if (OperatingSystem.IsWindows())
++                throw new PlatformNotSupportedException();
++
++            lock (_instanceLock)
++                _hostWakeup = wakeup;
++
++            wakeup?.Invoke();
++        }
++
++        public int ProcessManagedHostWork()
++        {
++            VerifyAccess();
++            if (OperatingSystem.IsWindows())
++                throw new PlatformNotSupportedException();
++
++            if (_managedWakeup == null)
++                return Timeout.Infinite;
++
++            PromoteTimers(Environment.TickCount);
++            ProcessQueue();
++
++            return _managedWakeup != null && _dueTimeFound
++                ? Math.Max(1, _dueTimeInTicks - Environment.TickCount)
++                : Timeout.Infinite;
++        }
++
+         private void SetWin32Timer(int dueTimeInTicks)
+         {
++            if (!OperatingSystem.IsWindows())
++            {
++                _isWin32TimerSet = _dueTimeFound;
++                _managedWakeup?.Set();
++                _hostWakeup?.Invoke();
++                return;
++            }
++
+             if(!IsWindowNull())
+             {
+                 int delta = dueTimeInTicks - Environment.TickCount;
+@@ -2660,6 +2733,14 @@ private void SetWin32Timer(int dueTimeInTicks)
+ 
+         private void KillWin32Timer()
+         {
++            if (!OperatingSystem.IsWindows())
++            {
++                _isWin32TimerSet = _dueTimeFound;
++                _managedWakeup?.Set();
++                _hostWakeup?.Invoke();
++                return;
++            }
++
+             if(!IsWindowNull())
+             {
+                 // We are being called on the dispatcher thread so we can rely on
+@@ -2820,6 +2901,8 @@ private object[] CombineParameters(object arg, object[] args)
          private static PriorityRange _backgroundPriorityRange = new PriorityRange(DispatcherPriority.Background, true, DispatcherPriority.Input, true);
          private static PriorityRange _idlePriorityRange = new PriorityRange(DispatcherPriority.SystemIdle, true, DispatcherPriority.ContextIdle, true);
  
++        private Action _hostWakeup;
 +        private AutoResetEvent _managedWakeup;
          private MessageOnlyHwndWrapper _window;
  
          private HwndWrapperHook _hook;
+diff --git a/src/Microsoft.DotNet.Wpf/src/WindowsBase/ref/WindowsBase.cs b/src/Microsoft.DotNet.Wpf/src/WindowsBase/ref/WindowsBase.cs
+index 6673a43..4e9f878 100644
+--- a/src/Microsoft.DotNet.Wpf/src/WindowsBase/ref/WindowsBase.cs
++++ b/src/Microsoft.DotNet.Wpf/src/WindowsBase/ref/WindowsBase.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ namespace System.Collections.Specialized
+@@ -1698,6 +1698,8 @@ namespace System.Windows.Threading
+ {
+     public sealed partial class Dispatcher
+     {
++        public void SetManagedHostWakeup(System.Action wakeup) { }
++        public int ProcessManagedHostWork() { throw null; }
+         internal Dispatcher() { }
+         public static System.Windows.Threading.Dispatcher CurrentDispatcher { get { throw null; } }
+         public bool HasShutdownFinished { get { throw null; } }

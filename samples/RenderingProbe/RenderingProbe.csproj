@@ -5,6 +5,7 @@
     <UseWPF Condition="'$(ForkLinux)' != 'true'">true</UseWPF>
     <TargetFramework Condition="'$(ForkLinux)' == 'true'">net10.0</TargetFramework>
     <ForkAssemblies Condition="'$(ForkLinux)' == 'true'">../../upstream/wpf/artifacts/packaging/Release/Microsoft.DotNet.Wpf.GitHub/lib/net10.0</ForkAssemblies>
+    <DefineConstants Condition="'$(ForkLinux)' == 'true'">$(DefineConstants);FORK_LINUX</DefineConstants>
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>

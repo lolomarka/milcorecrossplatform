@@ -94,3 +94,5 @@ wsl -d Debian -- env DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 ./artifacts/renderi
 ```
 
 The probe uses the button layout bounds and Avalonia pointer capture. A left press and release inside the button queues Button.OnClick through the WPF dispatcher. The WPF Click handler updates the fill and the click count in the window title. On Linux, the WPF dispatcher wakes Avalonia when work arrives or a timer deadline changes. Avalonia processes WPF queue operations on its UI thread and arms a timer for the next WPF deadline. The window removes the wakeup callback on close. Run the Linux executable with --window-dispatcher-smoke to verify a cross-thread SystemIdle operation, a WPF timer and window close. WPF mouse device integration, geometry hit testing, keyboard activation and Linux accessibility remain future work.
+
+The Linux window also shows a counter bound from Button.Content to TextBlock.Text through WPF binding. The probe subclass uses Avalonia FormattedText with DejaVu Sans to measure and draw the same single-line string. The binding uses invariant culture for the numeric counter.

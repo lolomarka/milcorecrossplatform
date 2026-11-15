@@ -15,6 +15,26 @@ internal sealed class ProbeButton : WC.Button
     internal void Activate() => OnClick();
 }
 
+#if FORK_LINUX
+// ponytail: the probe supports plain, single-line text. Rich text needs a WPF text backend.
+internal sealed class ProbeTextBlock : WC.TextBlock
+{
+    internal Avalonia.Media.FormattedText Format() => new(
+        Text, System.Globalization.CultureInfo.CurrentCulture, Avalonia.Media.FlowDirection.LeftToRight,
+        new Avalonia.Media.Typeface("DejaVu Sans"), FontSize, Avalonia.Media.Brushes.Black);
+
+    protected override W.Size MeasureOverride(W.Size constraint)
+    {
+        var text = Format();
+        return new W.Size(text.Width, text.Height);
+    }
+
+    protected override W.Size ArrangeOverride(W.Size finalSize) => finalSize;
+
+    protected override void OnRender(M.DrawingContext context) { }
+}
+#endif
+
 public sealed class ProbeApplication : Application
 {
     public override void OnFrameworkInitializationCompleted()
@@ -36,6 +56,24 @@ public sealed class ProbeApplication : Application
                 Template = new WC.ControlTemplate(typeof(WC.Button)) { VisualTree = face }
             };
             root.Children.Add(button);
+#if FORK_LINUX
+            var countText = new ProbeTextBlock
+            {
+                FontSize = 24,
+                OverridesDefaultStyle = true,
+                Margin = new W.Thickness(20, 96, 0, 0),
+                HorizontalAlignment = W.HorizontalAlignment.Left,
+                VerticalAlignment = W.VerticalAlignment.Top
+            };
+            countText.SetBinding(WC.TextBlock.TextProperty, new W.Data.Binding()
+            {
+                Source = button,
+                ConverterCulture = System.Globalization.CultureInfo.InvariantCulture,
+                Path = new W.PropertyPath(WC.ContentControl.ContentProperty)
+            });
+            button.Content = "0";
+            root.Children.Add(countText);
+#endif
             var presenter = new WpfVisualPresenter(root);
             var window = new Window
             {
@@ -87,6 +125,11 @@ public sealed class ProbeApplication : Application
             button.Click += (_, _) =>
             {
                 clicks++;
+#if FORK_LINUX
+                button.Content = clicks.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (!Equals(countText.Text, button.Content))
+                    throw new InvalidOperationException("The WPF counter binding did not update.");
+#endif
                 button.Background = clicks % 2 == 0 ? M.Brushes.Red : M.Brushes.Blue;
                 window.Title = $"CrossWpf rendering probe - clicks: {clicks}";
                 presenter.InvalidateArrange();
@@ -207,6 +250,10 @@ public sealed class WpfVisualPresenter : Avalonia.Controls.Control
 
     private static void DrawVisualContents(Avalonia.Media.DrawingContext context, M.Visual visual)
     {
+#if FORK_LINUX
+        if (visual is ProbeTextBlock text)
+            context.DrawText(text.Format(), new Point(0, 0));
+#endif
         var drawing = M.VisualTreeHelper.GetDrawing(visual);
         if (drawing != null)
             DrawDrawing(context, drawing);

@@ -300,6 +300,71 @@ index 95f58ac..c187389 100644
                              FrameworkPropertyMetadataOptions.Inherits));
  
          /// <summary>
+diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/TextBlock.cs b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/TextBlock.cs
+index 13a8267..a8bfafe 100644
+--- a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/TextBlock.cs
++++ b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/TextBlock.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ //
+@@ -1158,7 +1158,7 @@ protected override Visual GetVisualChild(int index)
+         /// </summary>
+         /// <param name="constraint">Constraint size.</param>
+         /// <returns>Computed desired size.</returns>
+-        protected sealed override Size MeasureOverride(Size constraint)
++        protected override Size MeasureOverride(Size constraint)
+         {
+             VerifyReentrancy();
+ 
+@@ -1367,7 +1367,7 @@ protected sealed override Size MeasureOverride(Size constraint)
+         /// Content arrangement.
+         /// </summary>
+         /// <param name="arrangeSize">Size that element should use to arrange itself and its children.</param>
+-        protected sealed override Size ArrangeOverride(Size arrangeSize)
++        protected override Size ArrangeOverride(Size arrangeSize)
+         {
+             VerifyReentrancy();
+ 
+@@ -1472,7 +1472,7 @@ protected sealed override Size ArrangeOverride(Size arrangeSize)
+         /// Render control's content.
+         /// </summary>
+         /// <param name="ctx">Drawing context.</param>
+-        protected sealed override void OnRender(DrawingContext ctx)
++        protected override void OnRender(DrawingContext ctx)
+         {
+             VerifyReentrancy();
+ 
+diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Data/BindingExpressionBase.cs b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Data/BindingExpressionBase.cs
+index 2de177c..0d1f67c 100644
+--- a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Data/BindingExpressionBase.cs
++++ b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Data/BindingExpressionBase.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ //
+@@ -919,7 +919,7 @@ internal virtual bool AttachOverride(DependencyObject target, DependencyProperty
+             DetermineEffectiveValidatesOnNotifyDataErrors();
+ 
+             // root bindings on TextBox.Text need to listen for IME composition events
+-            if (dp == System.Windows.Controls.TextBox.TextProperty && IsReflective && !IsInBindingExpressionCollection)
++            if (IsReflective && !IsInBindingExpressionCollection && target is System.Windows.Controls.Primitives.TextBoxBase && dp == System.Windows.Controls.TextBox.TextProperty)
+             {
+                 System.Windows.Controls.Primitives.TextBoxBase tbb = target as System.Windows.Controls.Primitives.TextBoxBase;
+                 if (tbb != null)
+@@ -950,7 +950,7 @@ internal virtual void DetachOverride()
+             UpdateNotifyDataErrorValidationErrors(null);
+ 
+             // root bindings on TextBox.Text need to stop listening for IME composition events
+-            if (TargetProperty == System.Windows.Controls.TextBox.TextProperty && IsReflective && !IsInBindingExpressionCollection)
++            if (IsReflective && !IsInBindingExpressionCollection && TargetElement is System.Windows.Controls.Primitives.TextBoxBase && TargetProperty == System.Windows.Controls.TextBox.TextProperty)
+             {
+                 System.Windows.Controls.Primitives.TextBoxBase tbb = TargetElement as System.Windows.Controls.Primitives.TextBoxBase;
+                 if (tbb != null)
 diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/SystemFonts.cs b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/SystemFonts.cs
 index 00fe5a2..8868188 100644
 --- a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/SystemFonts.cs
@@ -402,6 +467,39 @@ index 257eed0..0db075c 100644
  
              EventManager.RegisterClassHandler(typeof(Window),
                  UIElement.ManipulationCompletedEvent,
+diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/ref/PresentationFramework.cs b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/ref/PresentationFramework.cs
+index b849465..ab48c80 100644
+--- a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/ref/PresentationFramework.cs
++++ b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/ref/PresentationFramework.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ namespace Microsoft.Win32
+@@ -7119,7 +7119,7 @@ public TextBlock(System.Windows.Documents.Inline inline) { }
+         public System.Windows.TextWrapping TextWrapping { get { throw null; } set { } }
+         public System.Windows.Documents.Typography Typography { get { throw null; } }
+         protected override int VisualChildrenCount { get { throw null; } }
+-        protected sealed override System.Windows.Size ArrangeOverride(System.Windows.Size arrangeSize) { throw null; }
++        protected override System.Windows.Size ArrangeOverride(System.Windows.Size arrangeSize) { throw null; }
+         public static double GetBaselineOffset(System.Windows.DependencyObject element) { throw null; }
+         public static System.Windows.Media.FontFamily GetFontFamily(System.Windows.DependencyObject element) { throw null; }
+         [System.ComponentModel.TypeConverterAttribute(typeof(System.Windows.FontSizeConverter))]
+@@ -7137,11 +7137,11 @@ public TextBlock(System.Windows.Documents.Inline inline) { }
+         protected override System.Windows.Media.Visual GetVisualChild(int index) { throw null; }
+         protected sealed override System.Windows.Media.HitTestResult HitTestCore(System.Windows.Media.PointHitTestParameters hitTestParameters) { throw null; }
+         protected virtual System.Windows.IInputElement InputHitTestCore(System.Windows.Point point) { throw null; }
+-        protected sealed override System.Windows.Size MeasureOverride(System.Windows.Size constraint) { throw null; }
++        protected override System.Windows.Size MeasureOverride(System.Windows.Size constraint) { throw null; }
+         protected virtual void OnChildDesiredSizeChangedCore(System.Windows.UIElement child) { }
+         protected override System.Windows.Automation.Peers.AutomationPeer OnCreateAutomationPeer() { throw null; }
+         protected sealed override void OnPropertyChanged(System.Windows.DependencyPropertyChangedEventArgs e) { }
+-        protected sealed override void OnRender(System.Windows.Media.DrawingContext ctx) { }
++        protected override void OnRender(System.Windows.Media.DrawingContext ctx) { }
+         public static void SetBaselineOffset(System.Windows.DependencyObject element, double value) { }
+         public static void SetFontFamily(System.Windows.DependencyObject element, System.Windows.Media.FontFamily value) { }
+         public static void SetFontSize(System.Windows.DependencyObject element, double value) { }
 diff --git a/src/Microsoft.DotNet.Wpf/src/Shared/MS/Utility/Trace.cs b/src/Microsoft.DotNet.Wpf/src/Shared/MS/Utility/Trace.cs
 index 0ca283f..8a4232e 100644
 --- a/src/Microsoft.DotNet.Wpf/src/Shared/MS/Utility/Trace.cs

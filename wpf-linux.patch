@@ -262,6 +262,25 @@ index 5c67a74..59c6da0 100644
              if (_setDpi)
              {
                  _setDpi = false;
+diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/Button.cs b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/Button.cs
+index 5bbf0a6..e3e6a88 100644
+--- a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/Button.cs
++++ b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/Button.cs
+@@ -1,4 +1,4 @@
+-﻿// Licensed to the .NET Foundation under one or more agreements.
++// Licensed to the .NET Foundation under one or more agreements.
+ // The .NET Foundation licenses this file to you under the MIT license.
+ 
+ using System.Windows.Automation.Peers;
+@@ -246,7 +246,7 @@ protected override System.Windows.Automation.Peers.AutomationPeer OnCreateAutoma
+         /// </summary>
+         protected override void OnClick()
+         {
+-            if (AutomationPeer.ListenerExists(AutomationEvents.InvokePatternOnInvoked))
++            if (OperatingSystem.IsWindows() && AutomationPeer.ListenerExists(AutomationEvents.InvokePatternOnInvoked))
+             {
+                 AutomationPeer peer = UIElementAutomationPeer.CreatePeerForElement(this);
+                 peer?.RaiseAutomationEvent(AutomationEvents.InvokePatternOnInvoked);
 diff --git a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/Control.cs b/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/Control.cs
 index 95f58ac..c187389 100644
 --- a/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Controls/Control.cs

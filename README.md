@@ -87,10 +87,10 @@ wsl -d Debian -- timeout 20s env DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 ./artif
 
 The probe renders two PNGs from WPF drawings after explicit Measure and Arrange passes. Pixel checks cover fill, opacity, translation, clipping, and resize. The Linux path uses a managed composition lock and renders without a window.
 
-Use `--window` to display the same WPF scene in an Avalonia desktop window. On Debian the window mode requires an X11 display and Avalonia's X11 runtime libraries, including libICE and libSM.
+Use `--window` to display a WPF button with a rectangle template in an Avalonia desktop window. On Debian the window mode requires an X11 display and Avalonia's X11 runtime libraries, including libICE and libSM.
 
 ```powershell
 wsl -d Debian -- env DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 ./artifacts/rendering-linux/RenderingProbe --window
 ```
 
-A left click inside the WPF rectangle raises MouseDown on that rectangle. The probe uses the rectangle offset and RenderSize for this check. The WPF handler queues the fill, click count, and presenter update through Dispatcher.BeginInvoke. On Linux, the WPF dispatcher wakes Avalonia when work arrives or a timer deadline changes. Avalonia processes WPF queue operations on its UI thread and arms a timer for the next WPF deadline. The window removes the wakeup callback on close. Run the Linux executable with --window-dispatcher-smoke to verify a cross-thread SystemIdle operation, a WPF timer and window close. General WPF geometry hit testing, and pointer state remain future work.
+The probe uses the button layout bounds and Avalonia pointer capture. A left press and release inside the button queues Button.OnClick through the WPF dispatcher. The WPF Click handler updates the fill and the click count in the window title. On Linux, the WPF dispatcher wakes Avalonia when work arrives or a timer deadline changes. Avalonia processes WPF queue operations on its UI thread and arms a timer for the next WPF deadline. The window removes the wakeup callback on close. Run the Linux executable with --window-dispatcher-smoke to verify a cross-thread SystemIdle operation, a WPF timer and window close. WPF mouse device integration, geometry hit testing, keyboard activation and Linux accessibility remain future work.

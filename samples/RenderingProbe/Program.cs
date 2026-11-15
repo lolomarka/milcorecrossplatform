@@ -5,10 +5,15 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using W = System.Windows;
 using M = System.Windows.Media;
-using I = System.Windows.Input;
 using T = System.Windows.Threading;
+using WC = System.Windows.Controls;
 
 namespace CrossWpf.RenderingProbe;
+
+internal sealed class ProbeButton : WC.Button
+{
+    internal void Activate() => OnClick();
+}
 
 public sealed class ProbeApplication : Application
 {
@@ -16,7 +21,21 @@ public sealed class ProbeApplication : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var root = Program.CreateScene(out var rectangle);
+            var root = new WC.Grid { Background = M.Brushes.White };
+            var face = new W.FrameworkElementFactory(typeof(W.Shapes.Rectangle));
+            face.SetValue(W.Shapes.Shape.FillProperty, new W.TemplateBindingExtension(WC.Control.BackgroundProperty));
+            var button = new ProbeButton
+            {
+                Width = 80,
+                Height = 60,
+                Background = M.Brushes.Red,
+                HorizontalAlignment = W.HorizontalAlignment.Left,
+                VerticalAlignment = W.VerticalAlignment.Top,
+                Margin = new W.Thickness(20, 20, 0, 0),
+                OverridesDefaultStyle = true,
+                Template = new WC.ControlTemplate(typeof(WC.Button)) { VisualTree = face }
+            };
+            root.Children.Add(button);
             var presenter = new WpfVisualPresenter(root);
             var window = new Window
             {
@@ -65,39 +84,53 @@ public sealed class ProbeApplication : Application
             };
 #endif
             int clicks = 0;
-            rectangle.MouseDown += (_, args) =>
+            button.Click += (_, _) =>
             {
-                if (args.ChangedButton != I.MouseButton.Left)
-                    return;
-
-                root.Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    clicks++;
-                    rectangle.Fill = clicks % 2 == 0 ? M.Brushes.Red : M.Brushes.Blue;
-                    window.Title = $"CrossWpf rendering probe - clicks: {clicks}";
-                    presenter.InvalidateArrange();
-                    presenter.InvalidateVisual();
-                }));
+                clicks++;
+                button.Background = clicks % 2 == 0 ? M.Brushes.Red : M.Brushes.Blue;
+                window.Title = $"CrossWpf rendering probe - clicks: {clicks}";
+                presenter.InvalidateArrange();
+                presenter.InvalidateVisual();
             };
+
+            bool IsOverButton(Avalonia.Input.PointerEventArgs args)
+            {
+                var point = args.GetPosition(presenter);
+                var offset = M.VisualTreeHelper.GetOffset(button);
+                var bounds = new W.Rect(new W.Point(offset.X, offset.Y), button.RenderSize);
+                return button.IsEnabled && button.IsHitTestVisible &&
+                    bounds.Contains(new W.Point(point.X, point.Y));
+            }
+
+            // ponytail: Avalonia owns capture for this single button until WPF has a platform mouse device.
+            Avalonia.Input.IPointer? pressed = null;
             window.PointerPressed += (_, args) =>
             {
-                if (args.GetCurrentPoint(presenter).Properties.PointerUpdateKind != Avalonia.Input.PointerUpdateKind.LeftButtonPressed)
-                    return;
-
-                var point = args.GetPosition(presenter);
-                // ponytail: the window scene has one untransformed rectangle; general geometry needs a hit-test backend.
-                var offset = M.VisualTreeHelper.GetOffset(rectangle);
-                var bounds = new W.Rect(new W.Point(offset.X, offset.Y), rectangle.RenderSize);
-                if (!rectangle.IsEnabled || !rectangle.IsHitTestVisible ||
-                    !bounds.Contains(new W.Point(point.X, point.Y)))
+                if (pressed != null ||
+                    args.GetCurrentPoint(presenter).Properties.PointerUpdateKind != Avalonia.Input.PointerUpdateKind.LeftButtonPressed ||
+                    !IsOverButton(args))
                 {
                     return;
                 }
 
-                rectangle.RaiseEvent(new I.MouseButtonEventArgs(I.Mouse.PrimaryDevice, Environment.TickCount, I.MouseButton.Left)
-                {
-                    RoutedEvent = I.Mouse.MouseDownEvent
-                });
+                args.Pointer.Capture(window);
+                if (args.Pointer.Captured == window)
+                    pressed = args.Pointer;
+            };
+            window.PointerCaptureLost += (_, args) =>
+            {
+                if (pressed == args.Pointer)
+                    pressed = null;
+            };
+            window.PointerReleased += (_, args) =>
+            {
+                if (pressed != args.Pointer || args.InitialPressMouseButton != Avalonia.Input.MouseButton.Left)
+                    return;
+
+                pressed = null;
+                args.Pointer.Capture(null);
+                if (IsOverButton(args))
+                    button.Dispatcher.BeginInvoke(new Action(button.Activate));
             };
             desktop.MainWindow = window;
 #if FORK_LINUX
